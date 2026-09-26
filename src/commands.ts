@@ -15,7 +15,8 @@ import {
   getUser,
   getUsers,
 } from "./lib/db/queries/users.js";
-import { fetchFeed } from "./lib/rss.js";
+import { getPostsForUser } from "./lib/db/queries/posts.js";
+import { formatDuration, parseDuration, scrapeFeeds } from "./lib/aggregate.js";
 import { Feed, User } from "./lib/db/schema.js";
 
 function printFeed(feed: Feed, user: User) {
@@ -120,8 +121,34 @@ export async function handlerUsers(cmdName: string, ...args: string[]) {
 }
 
 export async function handlerAgg(cmdName: string, ...args: string[]) {
-  const feed = await fetchFeed("https://www.wagslane.dev/index.xml");
-  console.log(JSON.stringify(feed, null, 2));
+  if (args.length < 1) {
+    throw new Error(`usage: ${cmdName} <time_between_reqs>`);
+  }
+
+  const [timeBetweenReqsStr] = args;
+  const timeBetweenRequests = parseDuration(timeBetweenReqsStr);
+
+  console.log(`Collecting feeds every ${formatDuration(timeBetweenRequests)}`);
+
+  const handleError = (err: unknown) => {
+    console.error(
+      `Error scraping feeds: ${err instanceof Error ? err.message : err}`,
+    );
+  };
+
+  scrapeFeeds().catch(handleError);
+
+  const interval = setInterval(() => {
+    scrapeFeeds().catch(handleError);
+  }, timeBetweenRequests);
+
+  await new Promise<void>((resolve) => {
+    process.on("SIGINT", () => {
+      console.log("Shutting down feed aggregator...");
+      clearInterval(interval);
+      resolve();
+    });
+  });
 }
 
 export async function handlerAddFeed(
@@ -203,6 +230,36 @@ export async function handlerUnfollow(
 
   await deleteFeedFollow(user.id, feed.id);
   console.log(`${user.name} has unfollowed ${feed.name}`);
+}
+
+export async function handlerBrowse(
+  cmdName: string,
+  user: User,
+  ...args: string[]
+) {
+  let limit = 2;
+
+  if (args.length > 0) {
+    const parsedLimit = parseInt(args[0], 10);
+    if (isNaN(parsedLimit) || parsedLimit < 1) {
+      throw new Error(`usage: ${cmdName} [limit]`);
+    }
+    limit = parsedLimit;
+  }
+
+  const userPosts = await getPostsForUser(user.id, limit);
+
+  for (const post of userPosts) {
+    console.log(`* ${post.title}`);
+    console.log(`  ${post.url}`);
+    if (post.publishedAt) {
+      console.log(`  Published: ${post.publishedAt}`);
+    }
+    if (post.description) {
+      console.log(`  ${post.description}`);
+    }
+    console.log("");
+  }
 }
 
 export function registerCommand(

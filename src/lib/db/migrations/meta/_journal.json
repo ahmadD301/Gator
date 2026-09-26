@@ -22,6 +22,20 @@
       "when": 1790442632591,
       "tag": "0002_cool_prodigy",
       "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1790444656787,
+      "tag": "0003_even_wild_pack",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1790449497358,
+      "tag": "0004_vengeful_marvex",
+      "breakpoints": true
     }
   ]
 }
